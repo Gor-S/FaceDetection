@@ -33,3 +33,10 @@ Faces Extractor is a program that detects and extracts faces from videos, then e
 ## 7. References
 1. OpenCV Documentation
 2. ESRGAN, MTCNN research papers
+
+
+pip install -r requirements.txt
+
+
+Path to models: https://drive.google.com/drive/folders/1tJ-IfF_luVGGiTgi2PMjpRW05dRvi8_-?usp=drive_link
+Path to gfpgan: https://drive.google.com/drive/folders/1gszj4kZUUVepviidgykzW4Yfb4jM-zek?usp=drive_link
