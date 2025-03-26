@@ -1,201 +1,190 @@
+import os
+import shutil
+import numpy as np
 import cv2
 import mediapipe as mp
-import os
-import numpy as np
-import shutil
-
-mp_face_detection = mp.solutions.face_detection
-mp_face_mesh = mp.solutions.face_mesh
-
 
 class FaceEvaluator:
-    @staticmethod
-    def upscale_if_needed(image, min_size=150):
+    def __init__(self, min_detection_confidence=0.3, eye_ar_base=0.15):
         """
-        If the height or width of the face (or the entire image) is too small,
-        upscale the image to increase the likelihood of correct recognition by Mediapipe.
+        Initializes the FaceEvaluator with specified detection confidence and base eye aspect ratio.
+        
+        Parameters:
+        min_detection_confidence (float): Minimum confidence threshold for face detection.
+        eye_ar_base (float): Base value for eye aspect ratio normalization.
+        """
+        self.min_detection_confidence = min_detection_confidence
+        self.eye_ar_base = eye_ar_base
+        # Initialize two face detection models with different model selections
+        self.face_detection_1 = mp.solutions.face_detection.FaceDetection(model_selection=1, 
+                                                                          min_detection_confidence=min_detection_confidence)
+        self.face_detection_0 = mp.solutions.face_detection.FaceDetection(model_selection=0, 
+                                                                          min_detection_confidence=min_detection_confidence)
+        # Initialize the face mesh model to detect facial landmarks
+        self.face_mesh = mp.solutions.face_mesh.FaceMesh(
+            static_image_mode=True,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=min_detection_confidence
+        )
 
-        min_size: the minimum height or width below which upscaling is performed.
+    def upscale_if_needed(self, image, min_size=150):
+        """
+        Upscales the image if its height or width is below the specified minimum size.
+        
+        Parameters:
+        image (numpy.ndarray): Input image.
+        min_size (int): Minimum size for width and height.
+        
+        Returns:
+        numpy.ndarray: Upscaled image if needed.
         """
         h, w, _ = image.shape
         if h < min_size or w < min_size:
-            # Upscaling factor:
-            # e.g., if h=75 and min_size=150, scale ~ 2
             scale = max(min_size / h, min_size / w)
             new_w = int(w * scale)
             new_h = int(h * scale)
             image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
         return image
 
-    @staticmethod
-    def evaluate_frontalness(image_rgb, min_detection_confidence=0.3):
+    def evaluate_frontalness(self, image_rgb):
         """
-        Evaluates the "frontalness" of a face: how centered the nose is between the eyes.
-        Returns a value between 0 and 1, where 1 means a perfectly frontal face.
+        Evaluates how frontal the face is by comparing the distances between nose tip and eyes.
+        
+        Parameters:
+        image_rgb (numpy.ndarray): Input image in RGB format.
+        
+        Returns:
+        float: Ratio indicating frontalness (closer to 1 means more frontal).
         """
-        with mp_face_mesh.FaceMesh(
-            static_image_mode=True,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=min_detection_confidence
-        ) as face_mesh:
-            results = face_mesh.process(image_rgb)
-            if not results.multi_face_landmarks:
-                return 0
-            landmarks = results.multi_face_landmarks[0].landmark
+        results = self.face_mesh.process(image_rgb)
+        if not results.multi_face_landmarks:
+            return 0
+        landmarks = results.multi_face_landmarks[0].landmark
 
-            # Indices: 1 - nose, 33 - left outer eye corner, 263 - right outer eye corner
-            left_eye = landmarks[33]
-            right_eye = landmarks[263]
-            nose_tip = landmarks[1]
+        left_eye = landmarks[33]
+        right_eye = landmarks[263]
+        nose_tip = landmarks[1]
 
-            left_distance = abs(nose_tip.x - left_eye.x)
-            right_distance = abs(right_eye.x - nose_tip.x)
-            if max(left_distance, right_distance) < 1e-6:
-                return 0
-            ratio = min(left_distance, right_distance) / max(left_distance, right_distance)
-            return ratio
+        left_distance = abs(nose_tip.x - left_eye.x)
+        right_distance = abs(right_eye.x - nose_tip.x)
+        if max(left_distance, right_distance) < 1e-6:
+            return 0
+        ratio = min(left_distance, right_distance) / max(left_distance, right_distance)
+        return ratio
 
-    @staticmethod
-    def evaluate_eyes_open(image_rgb, min_detection_confidence=0.3, eye_ar_base=0.15):
+    def evaluate_eyes_open(self, image_rgb):
         """
-        Evaluates how open the eyes are (using Eye Aspect Ratio, EAR).
-        Returns a value between 0 and 1, where 1 means fully open eyes.
-
-        The parameter eye_ar_base sets the baseline EAR threshold for normalization.
-        The lower the eye_ar_base, the easier it is to "pass" the open-eyes check.
+        Evaluates how open the eyes are using the eye aspect ratio.
+        
+        Parameters:
+        image_rgb (numpy.ndarray): Input image in RGB format.
+        
+        Returns:
+        float: Normalized eye aspect ratio (0 to 1).
         """
-        with mp_face_mesh.FaceMesh(
-            static_image_mode=True,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=min_detection_confidence
-        ) as face_mesh:
-            results = face_mesh.process(image_rgb)
-            if not results.multi_face_landmarks:
-                return 0
-            landmarks = results.multi_face_landmarks[0].landmark
+        results = self.face_mesh.process(image_rgb)
+        if not results.multi_face_landmarks:
+            return 0
+        landmarks = results.multi_face_landmarks[0].landmark
 
-            # Left eye (outer and inner corners, top and bottom points)
-            left_corner = landmarks[33]
-            right_corner = landmarks[133]
-            top_left = landmarks[159]
-            bottom_left = landmarks[145]
+        # Left eye landmarks
+        left_corner = landmarks[33]
+        right_corner = landmarks[133]
+        top_left = landmarks[159]
+        bottom_left = landmarks[145]
 
-            # Right eye (outer and inner corners, top and bottom points)
-            right_corner_r = landmarks[263]
-            left_corner_r = landmarks[362]
-            top_right = landmarks[386]
-            bottom_right = landmarks[374]
+        # Right eye landmarks
+        right_corner_r = landmarks[263]
+        left_corner_r = landmarks[362]
+        top_right = landmarks[386]
+        bottom_right = landmarks[374]
 
-            # EAR for left eye
-            left_horizontal = np.sqrt((left_corner.x - right_corner.x)**2 + (left_corner.y - right_corner.y)**2)
-            left_vertical = np.sqrt((top_left.x - bottom_left.x)**2 + (top_left.y - bottom_left.y)**2)
-            left_ear = left_vertical / left_horizontal if left_horizontal > 0 else 0
+        # Calculate horizontal and vertical distances for left eye
+        left_horizontal = np.linalg.norm([left_corner.x - right_corner.x, left_corner.y - right_corner.y])
+        left_vertical = np.linalg.norm([top_left.x - bottom_left.x, top_left.y - bottom_left.y])
+        left_ear = left_vertical / left_horizontal if left_horizontal > 0 else 0
 
-            # EAR for right eye
-            right_horizontal = np.sqrt((right_corner_r.x - left_corner_r.x)**2 + (right_corner_r.y - left_corner_r.y)**2)
-            right_vertical = np.sqrt((top_right.x - bottom_right.x)**2 + (top_right.y - bottom_right.y)**2)
-            right_ear = right_vertical / right_horizontal if right_horizontal > 0 else 0
+        # Calculate horizontal and vertical distances for right eye
+        right_horizontal = np.linalg.norm([right_corner_r.x - left_corner_r.x, right_corner_r.y - left_corner_r.y])
+        right_vertical = np.linalg.norm([top_right.x - bottom_right.x, top_right.y - bottom_right.y])
+        right_ear = right_vertical / right_horizontal if right_horizontal > 0 else 0
 
-            ear_avg = (left_ear + right_ear) / 2
+        # Average eye aspect ratio and normalize it
+        ear_avg = (left_ear + right_ear) / 2
+        normalized_ear = np.clip((ear_avg - self.eye_ar_base) / 0.2, 0, 1)
+        return normalized_ear
 
-            # Normalization:
-            # For example, if ear_avg = 0.15 and eye_ar_base = 0.15, then normalized_ear = (0.15 - 0.15)/0.2 = 0
-            # If ear_avg = 0.25, normalized_ear = (0.25 - 0.15)/0.2 = 0.5
-            # The higher the ear_avg, the closer to 1.
-            normalized_ear = np.clip((ear_avg - eye_ar_base) / 0.2, 0, 1)
-            return normalized_ear
-
-    @classmethod
-    def evaluate_face_quality(cls, image_path):
+    def evaluate(self, image_path):
         """
-        Calculates the final "rating" of an image based on:
-          1. Sharpness.
-          2. Brightness.
-          3. Face coverage in the frame.
-          4. Centering of the face.
-          5. Frontalness.
-          6. Eye openness.
-          7. Resolution.
-
-        Returns a number between 0 and 1 (approximately), where higher is better.
-        If no face is found, returns 0.
+        Evaluates the quality of the image at the given path based on several criteria:
+        sharpness, brightness, face coverage, centering, frontalness, eye openness, and resolution.
+        
+        Parameters:
+        image_path (str): Path to the image file.
+        
+        Returns:
+        float: Final quality score of the image.
         """
         image = cv2.imread(image_path)
         if image is None:
             print(f"[DEBUG] Could not load: {image_path}")
             return 0
 
-        # Upscale the image if it is too small:
-        image = cls.upscale_if_needed(image, min_size=150)
-
+        image = self.upscale_if_needed(image, min_size=150)
         h, w, _ = image.shape
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # Face detection (lower the threshold to 0.3 to not miss weak faces)
-        with mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.3) as face_detection:
-            results = face_detection.process(image_rgb)
-            if not results.detections:
-                # If no face is found, try again with model 0 (sometimes better for large faces)
-                with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.3) as face_detection0:
-                    results0 = face_detection0.process(image_rgb)
-                    if not results0.detections:
-                        print(f"[DEBUG] Face not found: {image_path}")
-                        return 0
-                    else:
-                        detection = results0.detections[0]
+        # Use primary face detection; if not found, try secondary
+        results = self.face_detection_1.process(image_rgb)
+        if not results.detections:
+            results0 = self.face_detection_0.process(image_rgb)
+            if not results0.detections:
+                print(f"[DEBUG] Face not found: {image_path}")
+                return 0
             else:
-                detection = results.detections[0]
+                detection = results0.detections[0]
+        else:
+            detection = results.detections[0]
 
-        # Get the face bounding box
+        # Compute bounding box and face coverage
         bbox = detection.location_data.relative_bounding_box
         face_x, face_y = bbox.xmin * w, bbox.ymin * h
         face_w, face_h = bbox.width * w, bbox.height * h
         face_area = face_w * face_h
-        coverage = face_area / (w * h)  # ratio of face area to total image area
+        coverage = face_area / (w * h)
 
-        # Calculate the center of the face
+        # Compute distance of face center from image center (normalized)
         face_center_x = face_x + face_w / 2
         face_center_y = face_y + face_h / 2
         center_distance = np.sqrt((face_center_x - w / 2) ** 2 + (face_center_y - h / 2) ** 2)
-        center_distance_norm = center_distance / np.sqrt((w / 2)**2 + (h / 2)**2)  # 0 => centered, 1 => in the corner
+        center_distance_norm = center_distance / np.sqrt((w / 2)**2 + (h / 2)**2)
 
-        # Other metrics
-        # Sharpness
+        # Calculate sharpness using Laplacian variance
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         sharpness_val = cv2.Laplacian(gray, cv2.CV_64F).var()
-        # Normalize sharpness (e.g., 0..1000 => 0..1)
         sharpness_norm = np.clip(sharpness_val / 1000.0, 0, 1)
 
-        # Brightness
+        # Calculate brightness score (how close average brightness is to 128)
         brightness = np.mean(gray)
-        # Convert to a score in the range 0..1: the closer to 128, the better
         brightness_score = 1 - abs(brightness - 128) / 128
         brightness_score = np.clip(brightness_score, 0, 1)
 
-        # Frontalness
-        frontalness = cls.evaluate_frontalness(image_rgb, min_detection_confidence=0.3)
-
-        # Eye openness
-        eyes_open_score = cls.evaluate_eyes_open(image_rgb, min_detection_confidence=0.3, eye_ar_base=0.15)
-
-        # Resolution score:
-        # We normalize the resolution based on a threshold.
-        # For example, if we set 500,000 pixels as the threshold, then:
+        # Evaluate face frontalness and eye openness using face mesh
+        frontalness = self.evaluate_frontalness(image_rgb)
+        eyes_open_score = self.evaluate_eyes_open(image_rgb)
         resolution_score = np.clip((w * h) / 500000.0, 0, 1)
 
-        # Weight coefficients (adjustable)
+        # Weights for each metric
         w_sharp = 0.18
-        w_bright = 0.18
-        w_cov = 0.13
+        w_bright = 0.16
+        w_cov = 0.15
         w_center = 0.13
         w_frontal = 0.13
         w_eye = 0.13
         w_res = 0.12
 
-        # Final metric:
-        # (1 - center_distance_norm), since 0 => centered, 1 => far => the lower, the better.
+        # Compute the final score as a weighted sum of all metrics
         final_score = (w_sharp * sharpness_norm +
                        w_bright * brightness_score +
                        w_cov * coverage +
@@ -204,8 +193,7 @@ class FaceEvaluator:
                        w_eye * eyes_open_score +
                        w_res * resolution_score)
 
-        # [DEBUG] Optionally print to see detailed reasons
-        # (Disable if you do not want debug logs)
+        # Print debug information
         print(f"[DEBUG] {image_path}")
         print(f"  Sharpness={sharpness_val:.1f} => {sharpness_norm:.2f}")
         print(f"  Brightness={brightness:.1f} => {brightness_score:.2f}")
@@ -218,18 +206,26 @@ class FaceEvaluator:
 
         return final_score
 
+
 class FolderProcessor:
     @staticmethod
-    def select_best_image_in_folder(folder_path):
+    def select_best_image_in_folder(folder_path, evaluator):
         """
-        Iterates over all images in a folder and selects the one with the highest final score.
+        Selects the best image in the given folder based on the evaluation score.
+        
+        Parameters:
+        folder_path (str): Path to the folder containing images.
+        evaluator (FaceEvaluator): Instance of FaceEvaluator to evaluate images.
+        
+        Returns:
+        tuple: (best_image_path, best_score)
         """
         best_score = -1
         best_image = None
         for filename in os.listdir(folder_path):
             if filename.lower().endswith(('.jpg', '.jpeg', '.png')):
                 image_path = os.path.join(folder_path, filename)
-                score = FaceEvaluator.evaluate_face_quality(image_path)
+                score = evaluator.evaluate(image_path)
                 if score > best_score:
                     best_score = score
                     best_image = image_path
@@ -238,14 +234,19 @@ class FolderProcessor:
     @staticmethod
     def process_all_folders(parent_folder, output_folder):
         """
-        Iterates over all subfolders of parent_folder (person_0, person_1, ...),
-        finds the best photo in each folder, and copies it to output_folder.
+        Processes all subfolders within the parent folder, selects the best image from each,
+        and copies it to the output folder.
+        
+        Parameters:
+        parent_folder (str): Path to the parent folder containing subfolders with images.
+        output_folder (str): Path to the output folder where best images will be copied.
         """
         os.makedirs(output_folder, exist_ok=True)
+        evaluator = FaceEvaluator()
         for folder in os.listdir(parent_folder):
             folder_path = os.path.join(parent_folder, folder)
             if os.path.isdir(folder_path):
-                best_image, score = FolderProcessor.select_best_image_in_folder(folder_path)
+                best_image, score = FolderProcessor.select_best_image_in_folder(folder_path, evaluator)
                 if best_image:
                     output_subfolder = os.path.join(output_folder, folder)
                     os.makedirs(output_subfolder, exist_ok=True)
@@ -254,5 +255,3 @@ class FolderProcessor:
                     print(f"Best photo in '{folder}': {os.path.basename(best_image)}, score={score:.2f} -> {output_path}")
                 else:
                     print(f"No suitable images found in '{folder}'")
-
-
