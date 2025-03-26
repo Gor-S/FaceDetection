@@ -69,7 +69,7 @@ if __name__ == "__main__":
         
         # 4. Photo enhancement
         print("✨ Enhancing faces...")
-        model_type = 'gfpgan'  # gfgan or edsr
+        model_type = 'edsr'  # gfgan or edsr
         model_path = config["EDSR_model_path"] if model_type == 'edsr' else config["GFPGAN_model_path"]
 
         photo_enhancement.process_folders(

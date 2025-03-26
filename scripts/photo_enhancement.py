@@ -4,7 +4,7 @@ import numpy as np
 from gfpgan import GFPGANer
 
 class FaceEnhancer:
-    def __init__(self, model_type, model_path=None, upscale=2):
+    def __init__(self, model_type, model_path=None, upscale=4):
         """
         Initializes the FaceEnhancer class with the specified model type.
         
@@ -27,10 +27,10 @@ class FaceEnhancer:
                 bg_upsampler=None
             )
         elif self.model_type == 'edsr':
-            # Initialize OpenCV's super-resolution model
+            # Initialize OpenCV's super-resolution model with upscale x4
             self.sr = cv2.dnn_superres.DnnSuperResImpl_create()
             if model_path is None:
-                model_path = f'./models/{self.model_type.upper()}_x2.pb'
+                model_path = f'./models/{self.model_type.upper()}_x4.pb'
             self.sr.readModel(model_path)
             self.sr.setModel(self.model_type, upscale)
         else:
@@ -65,7 +65,7 @@ class FaceEnhancer:
             return self.sr.upsample(preprocessed)
         return image
 
-def process_folders(base_dir, model_type='gfpgan', model_path=None, upscale=2):
+def process_folders(base_dir, model_type='gfpgan', model_path=None, upscale=4): 
     """
     Processes all folders in the base directory and applies face enhancement.
     
@@ -99,4 +99,3 @@ def process_folders(base_dir, model_type='gfpgan', model_path=None, upscale=2):
                     enhanced_img = enhancer.enhance(image)
                     cv2.imwrite(output_path, enhanced_img)
                     print(f"✅ Saved: {output_path}")
-

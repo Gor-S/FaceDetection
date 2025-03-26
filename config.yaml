@@ -4,7 +4,7 @@ faces_output_dir: "./output/faces"               # Directory to save detected fa
 clusters_output_dir: "./output/clustered_faces"  # Directory for clustered faces
 best_faces_dir: "./output/best_faces"            # Directory for best-selected faces
 GFPGAN_model_path: "./models/GFPGANv1.3.pth"     # Path to GFPGAN model
-EDSR_model_path: "./models/EDSR_x2.pb"                                       # Path to EDSR model
+EDSR_model_path: "./models/EDSR_x4.pb"                                       # Path to EDSR model
 face_model_path: "./models/yolov8n-face.pt"      # Path to YOLO face detection model
 
 # Video Processing
