@@ -9,7 +9,7 @@ class FaceEnhancer:
         Initializes the FaceEnhancer class with the specified model type.
         
         Parameters:
-        model_type (str): The type of model to use ('gfpgan', 'edsr', 'espcn').
+        model_type (str): The type of model to use ('gfpgan', 'edsr').
         model_path (str, optional): Path to the model file. If None, default paths are used.
         upscale (int): Upscaling factor for the image.
         """
