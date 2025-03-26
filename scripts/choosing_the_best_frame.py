@@ -7,10 +7,6 @@ import shutil
 mp_face_detection = mp.solutions.face_detection
 mp_face_mesh = mp.solutions.face_mesh
 
-def clear_clustered_faces(folder):
-    if os.path.exists(folder):
-        shutil.rmtree(folder)
-    os.makedirs(folder)
 
 class FaceEvaluator:
     @staticmethod

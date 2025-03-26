@@ -1,7 +1,14 @@
+import os
+import shutil
 import gc
 import torch
 import yaml
 from scripts import detect_faces, grouping_of_persons, choosing_the_best_frame, photo_enhancement
+
+
+def remove_folder(folder):
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
 
 # Load config file
 def load_config(config_path="config.yaml"):
@@ -38,7 +45,7 @@ if __name__ == "__main__":
         )
         processor.process()
         clear_memory()
-
+        
         # 2. Face clustering
         print("📂 Clustering faces...")
         clusterer = grouping_of_persons.FaceClustering(
@@ -55,18 +62,24 @@ if __name__ == "__main__":
             config["best_faces_dir"]
         )
 
-        # Cleanup temporary clustered faces
-        choosing_the_best_frame.clear_clustered_faces(config["clusters_output_dir"])
-        choosing_the_best_frame.clear_clustered_faces(config["faces_output_dir"])
+        # Cleanup temporary clustered faces and output faces
+        remove_folder(config["clusters_output_dir"])
+        remove_folder(config["faces_output_dir"])
         clear_memory()
-
+        
         # 4. Photo enhancement
         print("✨ Enhancing faces...")
+        model_type = 'gfpgan'  # gfgan or edsr
+        model_path = config["EDSR_model_path"] if model_type == 'edsr' else config["GFPGAN_model_path"]
+
         photo_enhancement.process_folders(
             config["best_faces_dir"],
-            config["GFPGAN_model_path"]
+            model_type,
+            model_path
         )
 
         print("✅ Processing complete!")
+        
     except Exception as e:
         print(f"❌ Error during processing: {e}")
+    
