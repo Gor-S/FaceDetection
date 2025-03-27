@@ -23,6 +23,7 @@ class FaceEnhancer:
                 model_path=model_path,
                 upscale=upscale,
                 arch='clean',
+                version='1.2',
                 channel_multiplier=2,
                 bg_upsampler=None
             )
