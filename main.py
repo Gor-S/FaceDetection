@@ -3,7 +3,7 @@ import shutil
 import gc
 import torch
 import yaml
-from scripts import detect_faces, grouping_of_persons, choosing_the_best_frame, photo_enhancement
+from scripts import detect_faces, grouping_of_persons, choosing_the_best_frame, photo_enhancement, PEBC
 
 
 def remove_folder(folder):
@@ -45,8 +45,9 @@ if __name__ == "__main__":
         )
         processor.process()
         clear_memory()
-        
+    
         # 2. Face clustering
+        PEBC.process_images_in_folder(config["faces_output_dir"])
         print("📂 Clustering faces...")
         clusterer = grouping_of_persons.FaceClustering(
             config["faces_output_dir"], 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
         )
         clusterer.cluster_faces()
         clear_memory()
-
+        
         # 3. Selecting the best frames
         print("📸 Selecting best frames...")
         choosing_the_best_frame.FolderProcessor.process_all_folders(
@@ -69,7 +70,7 @@ if __name__ == "__main__":
         
         # 4. Photo enhancement
         print("✨ Enhancing faces...")
-        model_type = 'edsr'  # gfgan or edsr
+        model_type = 'gfpgan'  # gfpgan or edsr
         model_path = config["EDSR_model_path"] if model_type == 'edsr' else config["GFPGAN_model_path"]
 
         photo_enhancement.process_folders(
