@@ -39,4 +39,5 @@ pip install -r requirements.txt
 
 
 Path to models: https://drive.google.com/drive/folders/1tJ-IfF_luVGGiTgi2PMjpRW05dRvi8_-?usp=drive_link
+
 Path to gfpgan: https://drive.google.com/drive/folders/1gszj4kZUUVepviidgykzW4Yfb4jM-zek?usp=drive_link
