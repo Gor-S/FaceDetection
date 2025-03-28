@@ -1,0 +1,13 @@
+# Paths
+video_path: "/home/aram/Downloads/8479989-uhd_3840_2160_25fps (1).mp4"                  # Path to input video
+faces_output_dir: "./output/faces"               # Directory to save detected faces
+clusters_output_dir: "./output/clustered_faces"  # Directory for clustered faces
+best_faces_dir: "./output/best_faces"            # Directory for best-selected faces
+GFPGAN_model_path: "./models/GFPGANv1.3.pth"     # Path to GFPGAN model
+EDSR_model_path: "./models/EDSR_x4.pb"                                       # Path to EDSR model
+face_model_path: "./models/yolov8n-face.pt"      # Path to YOLO face detection model
+
+# Video Processing
+frame_skip: 5      # Number of frames to skip
+max_workers: 8     # Number of processing threads
+
