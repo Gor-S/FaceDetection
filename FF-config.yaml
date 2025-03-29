@@ -1,0 +1,12 @@
+# ---------------FACE FINDER-----------------
+
+video_path: "/home/aram/Downloads/3026357-hd_1280_720_60fps.mp4"
+target_face_path: "/home/aram/Desktop/FaceDetection/Screenshot from 2025-03-29 17-48-46.png"
+model_path: "/home/aram/Desktop/FaceDetection/models/yolov8n-face.pt"
+frame_skip: 5
+output_dir: "FF_output_dir"
+threshold: 0.6
+min_gap: 1.0
+
+
+

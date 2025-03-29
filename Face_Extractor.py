@@ -1,42 +1,11 @@
-import os
-import shutil
-import gc
-import torch
-import yaml
-from scripts import detect_faces, grouping_of_persons, choosing_the_best_frame, photo_enhancement, PEBC
-
-
-def remove_folder(folder):
-    if os.path.exists(folder):
-        shutil.rmtree(folder)
-
-# Load config file
-def load_config(config_path="config.yaml"):
-    try:
-        with open(config_path, "r") as file:
-            return yaml.safe_load(file)
-    except FileNotFoundError:
-        print("❌ Error: Config file not found.")
-        exit(1)
-    except yaml.YAMLError as e:
-        print(f"❌ YAML parsing error: {e}")
-        exit(1)
-
-config = load_config()
-
-def clear_memory():
-    """ Free memory and clear GPU cache if available. """
-    gc.collect()
-    if torch.cuda.is_available():
-        try:
-            torch.cuda.empty_cache()
-        except RuntimeError as e:
-            print(f"⚠️ GPU memory cleanup error: {e}")
+from scripts import detect_faces, grouping_of_persons, choosing_the_best_frame, photo_enhancement, PEBC, tools
 
 if __name__ == "__main__":
+    
     try:
         # 1. Face detection
         print("🔍 Detecting faces...")
+        config = tools.load_config("FE-config.yaml")
         processor = detect_faces.VideoProcessor(
             config["video_path"], 
             config["face_model_path"],
@@ -44,7 +13,7 @@ if __name__ == "__main__":
             config["faces_output_dir"]
         )
         processor.process()
-        clear_memory()
+        tools.clear_memory()
     
         # 2. Face clustering
         PEBC.process_images_in_folder(config["faces_output_dir"])
@@ -54,7 +23,7 @@ if __name__ == "__main__":
             config["clusters_output_dir"]
         )
         clusterer.cluster_faces()
-        clear_memory()
+        tools.clear_memory()
         
         # 3. Selecting the best frames
         print("📸 Selecting best frames...")
@@ -64,9 +33,9 @@ if __name__ == "__main__":
         )
 
         # Cleanup temporary clustered faces and output faces
-        remove_folder(config["clusters_output_dir"])
-        remove_folder(config["faces_output_dir"])
-        clear_memory()
+        tools.remove_folder(config["clusters_output_dir"])
+        tools.remove_folder(config["faces_output_dir"])
+        tools.clear_memory()
         
         # 4. Photo enhancement
         print("✨ Enhancing faces...")

@@ -1,3 +1,5 @@
+# ---------------FACE EXTRACTOR-----------------
+
 # Paths
 video_path: "/home/aram/Downloads/5988648-hd_720_1280_25fps.mp4"                  # Path to input video
 faces_output_dir: "./output/faces"               # Directory to save detected faces
@@ -10,4 +12,6 @@ face_model_path: "./models/yolov8n-face.pt"      # Path to YOLO face detection m
 # Video Processing
 frame_skip: 5      # Number of frames to skip
 max_workers: 8     # Number of processing threads
+
+
 
