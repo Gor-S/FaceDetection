@@ -4,16 +4,16 @@ import gc
 import torch
 import multiprocessing
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from torch.utils.data import Dataset, DataLoader
 from ultralytics import YOLO
+from . import tools
 
-# Set device to CUDA if available, otherwise use CPU
 device = "cuda" if torch.cuda.is_available() else "cpu"
+config = tools.load_config("FE-config.yaml")
 
 class FrameDataset(Dataset):
     def __init__(self, video_path, start_frame, end_frame, frame_skip):
-        # Initialize dataset with video path, frame range, and frame skip interval
         self.video_path = video_path
         self.start_frame = start_frame
         self.end_frame = end_frame
@@ -37,29 +37,22 @@ class FrameDataset(Dataset):
         return frames
 
     def __len__(self):
-        # Return the number of frames in the dataset
         return len(self.frames)
 
     def __getitem__(self, idx):
-        # Return the frame corresponding to the given index
         return self.frames[idx]
 
 def process_batch(model, batch, output_dir):
     try:
-        # Batch is expected to be a list of tuples: (frame_id, frame)
         frame_ids, frames = zip(*batch)
         print(f"[DEBUG] Processing batch with {len(frames)} frames")
-        # Convert frames from BGR to RGB – YOLO model expects images in RGB format
         frames_rgb = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in frames]
-        # Perform prediction; the predict method accepts a list of images
         results = model.predict(source=frames_rgb, device=device)
-        # If the result is not a list, wrap it in a list
         if not isinstance(results, (list, tuple)):
             results = [results]
         for frame_id, frame, result in zip(frame_ids, frames, results):
             h, w, _ = frame.shape
             try:
-                # Process all detected objects in the frame
                 for i, box in enumerate(result.boxes.xyxy):
                     # Extract bounding box coordinates and add padding
                     x1, y1, x2, y2 = map(int, box)
@@ -67,33 +60,34 @@ def process_batch(model, batch, output_dir):
                     x1, y1 = max(0, x1 - padding_x), max(0, y1 - padding_y)
                     x2, y2 = min(w, x2 + padding_x), min(h, y2 + padding_y)
                     face = frame[y1:y2, x1:x2]
-                    # Unique filename for each face
                     save_path = os.path.join(output_dir, f"frame_{frame_id}_face_{i}.jpg")
                     cv2.imwrite(save_path, face)
             except Exception as inner_e:
                 print(f"[ERROR] Processing result for frame {frame_id}: {type(inner_e).__name__}: {inner_e}")
     except Exception as e:
-        # If an error occurs, e.g., AttributeError: bn, print the message and skip the batch
         print(f"[ERROR] Batch processing: {type(e).__name__}: {e}")
 
-def process_range(video_path, start_frame, end_frame, frame_skip, output_dir, model_path, batch_size=8):
-    # Load the model without the device argument, then move it to the appropriate device
+def collate_fn(batch):
+    return batch
+
+def process_range(video_path, start_frame, end_frame, frame_skip, output_dir, model_path, batch_size=8, num_workers=4):
     model = YOLO(model_path).to(device)
     if device == "cuda":
-        model.fuse()  # Fuse model layers for CUDA
-        model.half()  # Use FP16 for faster inference on CUDA
+        model.fuse()
+        model.half()
 
     dataset = FrameDataset(video_path, start_frame, end_frame, frame_skip)
-    # Use a custom collate_fn to keep the batch as a list of tuples (avoiding automatic conversion to tensors)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0, collate_fn=lambda x: x)
+    
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
 
     print(f"[{multiprocessing.current_process().name}] Processing frames {start_frame}–{end_frame}")
     with ThreadPoolExecutor(max_workers=4) as executor:
         for batch in dataloader:
             executor.submit(process_batch, model, batch, output_dir)
-            gc.collect()  # Memory cleanup
+            gc.collect()
             if device == "cuda":
                 torch.cuda.empty_cache()
+
 
 class VideoProcessor:
     def __init__(self, video_path, model_path, frame_skip, output_dir, max_gpu_workers=2, device=device):
@@ -106,19 +100,16 @@ class VideoProcessor:
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _choose_worker_count(self, max_gpu_workers):
-        # Get the number of CPU cores
+
         cpu_cores = multiprocessing.cpu_count()
-        
-        # Get the number of available GPUs
         gpu_cores = torch.cuda.device_count() if self.device == "cuda" else 0
         
         # Limit CPU workers to 70% of available cores
-        cpu_limit = max(1, int(cpu_cores * 0.7))
         
-        # Determine the number of workers based on GPU availability
+        cpu_limit = max(1, int(cpu_cores * config["cpu_limit"]))
+        
         max_workers = gpu_cores * max_gpu_workers if gpu_cores > 0 else cpu_limit
         
-        # Ensure that the number of workers does not exceed the CPU limit
         return min(cpu_limit, max_workers)
 
 
@@ -134,13 +125,15 @@ class VideoProcessor:
         ]
 
     def process(self):
-        # Start video processing
         print(f"[INFO] Device: {self.device.upper()}, Workers: {self.num_workers}")
         frame_ranges = self._split_video_ranges()
-        with multiprocessing.get_context("spawn").Pool(processes=self.num_workers) as pool:
-            args = [
-                (self.video_path, start, end, self.frame_skip, self.output_dir, self.model_path)
+        with ProcessPoolExecutor(max_workers=self.num_workers, mp_context=multiprocessing.get_context("spawn")) as executor:
+            futures = [
+                executor.submit(process_range, self.video_path, start, end, self.frame_skip, self.output_dir, self.model_path, num_workers=config["max_workers"])
+
                 for start, end in frame_ranges
             ]
-            pool.starmap(process_range, args)
+            for future in futures:
+                future.result() 
+
         print("[INFO] Processing complete.")

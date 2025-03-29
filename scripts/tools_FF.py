@@ -1,5 +1,4 @@
 """Face Finder"""
-
 import os
 import re
 import cv2
@@ -33,7 +32,6 @@ def compute_embedding(image_path, resnet, transform, device):
     img = cv2.imread(image_path)
     if img is None:
         raise ValueError(f"Unable to load image {image_path}")
-    # Convert BGR -> RGB and prepare the image
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     pil_img = Image.fromarray(img_rgb)
     img_tensor = transform(pil_img).unsqueeze(0).to(device)
@@ -70,7 +68,6 @@ def process_extracted_faces(faces_dir, target_embedding, fps, threshold=0.6, min
             print(f"[ERROR] Error computing embedding for {file}: {e}")
             continue
         distance = np.linalg.norm(target_embedding - embedding)
-        # If the distance is below the threshold, consider it a match
         if distance < threshold:
             time_sec = frame_number / fps
             detected_times.append(time_sec)

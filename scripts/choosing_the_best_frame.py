@@ -6,16 +6,9 @@ import mediapipe as mp
 
 class FaceEvaluator:
     def __init__(self, min_detection_confidence=0.3, eye_ar_base=0.15):
-        """
-        Initializes the FaceEvaluator with specified detection confidence and base eye aspect ratio.
-        
-        Parameters:
-        min_detection_confidence (float): Minimum confidence threshold for face detection.
-        eye_ar_base (float): Base value for eye aspect ratio normalization.
-        """
+
         self.min_detection_confidence = min_detection_confidence
         self.eye_ar_base = eye_ar_base
-        # Initialize two face detection models with different model selections
         self.face_detection_1 = mp.solutions.face_detection.FaceDetection(model_selection=1, 
                                                                           min_detection_confidence=min_detection_confidence)
         self.face_detection_0 = mp.solutions.face_detection.FaceDetection(model_selection=0, 
@@ -29,16 +22,6 @@ class FaceEvaluator:
         )
 
     def upscale_if_needed(self, image, min_size=150):
-        """
-        Upscales the image if its height or width is below the specified minimum size.
-        
-        Parameters:
-        image (numpy.ndarray): Input image.
-        min_size (int): Minimum size for width and height.
-        
-        Returns:
-        numpy.ndarray: Upscaled image if needed.
-        """
         h, w, _ = image.shape
         if h < min_size or w < min_size:
             scale = max(min_size / h, min_size / w)
@@ -48,15 +31,7 @@ class FaceEvaluator:
         return image
 
     def evaluate_frontalness(self, image_rgb):
-        """
-        Evaluates how frontal the face is by comparing the distances between nose tip and eyes.
-        
-        Parameters:
-        image_rgb (numpy.ndarray): Input image in RGB format.
-        
-        Returns:
-        float: Ratio indicating frontalness (closer to 1 means more frontal).
-        """
+
         results = self.face_mesh.process(image_rgb)
         if not results.multi_face_landmarks:
             return 0
@@ -74,15 +49,7 @@ class FaceEvaluator:
         return ratio
 
     def evaluate_eyes_open(self, image_rgb):
-        """
-        Evaluates how open the eyes are using the eye aspect ratio.
-        
-        Parameters:
-        image_rgb (numpy.ndarray): Input image in RGB format.
-        
-        Returns:
-        float: Normalized eye aspect ratio (0 to 1).
-        """
+
         results = self.face_mesh.process(image_rgb)
         if not results.multi_face_landmarks:
             return 0
@@ -116,16 +83,7 @@ class FaceEvaluator:
         return normalized_ear
 
     def evaluate(self, image_path):
-        """
-        Evaluates the quality of the image at the given path based on several criteria:
-        sharpness, brightness, face coverage, centering, frontalness, eye openness, and resolution.
-        
-        Parameters:
-        image_path (str): Path to the image file.
-        
-        Returns:
-        float: Final quality score of the image.
-        """
+
         image = cv2.imread(image_path)
         if image is None:
             print(f"[DEBUG] Could not load: {image_path}")
@@ -135,7 +93,6 @@ class FaceEvaluator:
         h, w, _ = image.shape
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # Use primary face detection; if not found, try secondary
         results = self.face_detection_1.process(image_rgb)
         if not results.detections:
             results0 = self.face_detection_0.process(image_rgb)
@@ -210,16 +167,7 @@ class FaceEvaluator:
 class FolderProcessor:
     @staticmethod
     def select_best_image_in_folder(folder_path, evaluator):
-        """
-        Selects the best image in the given folder based on the evaluation score.
-        
-        Parameters:
-        folder_path (str): Path to the folder containing images.
-        evaluator (FaceEvaluator): Instance of FaceEvaluator to evaluate images.
-        
-        Returns:
-        tuple: (best_image_path, best_score)
-        """
+
         best_score = -1
         best_image = None
         for filename in os.listdir(folder_path):
@@ -233,14 +181,7 @@ class FolderProcessor:
 
     @staticmethod
     def process_all_folders(parent_folder, output_folder):
-        """
-        Processes all subfolders within the parent folder, selects the best image from each,
-        and copies it to the output folder.
-        
-        Parameters:
-        parent_folder (str): Path to the parent folder containing subfolders with images.
-        output_folder (str): Path to the output folder where best images will be copied.
-        """
+
         os.makedirs(output_folder, exist_ok=True)
         evaluator = FaceEvaluator()
         for folder in os.listdir(parent_folder):

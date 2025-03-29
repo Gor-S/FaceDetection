@@ -1,10 +1,8 @@
-import os
 import torch
-import yaml
 from scripts import detect_faces, tools_FF, tools
  
 if __name__ == "__main__":
-    config = tools.load_config("FF-config.yaml")  # Load configuration from FF-config.yaml
+    config = tools.load_config("FF-config.yaml") 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     try:
@@ -19,7 +17,6 @@ if __name__ == "__main__":
         )
         video_processor.process()
         
-        # Get video FPS to convert frame numbers to seconds
         fps = tools_FF.get_video_fps(config["video_path"])
 
         # 2. Compute the embedding for the target face
@@ -45,4 +42,5 @@ if __name__ == "__main__":
 
     except Exception as e:
         print(f"❌ Error during processing: {e}")
+        tools.remove_folder(config["output_dir"])
 

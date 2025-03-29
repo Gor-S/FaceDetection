@@ -65,10 +65,10 @@ class FaceClustering:
                 clusters.setdefault(label, []).append(file)
 
             for cluster_id, files in clusters.items():
-                # For noise (label == -1) create a separate folder "unknown"
+
                 if cluster_id == -1:
                     continue
-                    #folder_name = os.path.join(self.output_folder, "unknown")
+
                 else:
                     folder_name = os.path.join(self.output_folder, f"person_{cluster_id}")
                 os.makedirs(folder_name, exist_ok=True)
