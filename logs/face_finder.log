@@ -1,7 +1,0 @@
-2025-04-02 17:30:33,146 - ERROR - ❌ Error during processing: Unable to open video to determine FPS.
-Traceback (most recent call last):
-  File "/home/aram/Desktop/FaceDetection/Face_Finder.py", line 40, in <module>
-    fps = tools_FF.get_video_fps(ff_config.get("video_path"))
-  File "/home/aram/Desktop/FaceDetection/scripts/tools_FF.py", line 14, in get_video_fps
-    raise ValueError("Unable to open video to determine FPS.")
-ValueError: Unable to open video to determine FPS.
