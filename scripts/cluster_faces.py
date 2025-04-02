@@ -6,6 +6,9 @@ from PIL import Image
 from facenet_pytorch import InceptionResnetV1
 import torchvision.transforms as transforms
 import hdbscan
+from . import logger
+
+get_logger = logger.get_logger
 
 class FaceClustering:
     def __init__(self, faces_folder, output_folder):
@@ -13,6 +16,7 @@ class FaceClustering:
         self.output_folder = output_folder
         self.image_extensions = ('.jpg', '.jpeg', '.png')
         os.makedirs(self.output_folder, exist_ok=True)
+        self.logger = get_logger("face_clustering")
 
         self.model = InceptionResnetV1(pretrained='vggface2').eval()
         self.transform = transforms.Compose([
@@ -33,7 +37,7 @@ class FaceClustering:
                 width, height = img.size
                 aspect_ratio = width / height
                 if aspect_ratio < 0.6 or aspect_ratio > 1.4:
-                    print(f"Skipping {image_path} due to unusual aspect ratio: {aspect_ratio:.2f}")
+                    self.logger.info(f"Skipping {image_path} due to unusual aspect ratio: {aspect_ratio:.2f}")
                     continue
                 img_tensor = self.transform(img).unsqueeze(0)
                 with torch.no_grad():
@@ -41,7 +45,7 @@ class FaceClustering:
                 embeddings.append(embedding.squeeze().cpu().numpy())
                 filenames.append(image_path)
             except Exception as e:
-                print(f"Error with {image_path}: {e}")
+                self.logger.error(f"Error with {image_path}: {e}")
         return np.array(embeddings) if embeddings else None, filenames
 
     def cluster_faces(self):
@@ -54,27 +58,23 @@ class FaceClustering:
             norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
             embeddings = embeddings / np.maximum(norms, 1e-10)
 
-            # Apply HDBSCAN with min_cluster_size=4 and metric 'euclidean'
-            # For normalized vectors, Euclidean distance is equivalent to cosine distance.
             clustering_model = hdbscan.HDBSCAN(min_cluster_size=4, metric='euclidean')
             labels = clustering_model.fit_predict(embeddings)
-            print(f"Created {len(set(labels))-1} clusters.")
+            self.logger.info(f"Created {len(set(labels))-1} clusters.")
 
             clusters = {}
             for label, file in zip(labels, filenames):
                 clusters.setdefault(label, []).append(file)
 
             for cluster_id, files in clusters.items():
-
                 if cluster_id == -1:
                     continue
-
                 else:
                     folder_name = os.path.join(self.output_folder, f"person_{cluster_id}")
                 os.makedirs(folder_name, exist_ok=True)
                 for file in files:
                     shutil.move(file, os.path.join(folder_name, os.path.basename(file)))
 
-            print("Sorting completed.")
+            self.logger.info("Sorting completed.")
         else:
-            print("Failed to compute embeddings for any image.")
+            self.logger.error("Failed to compute embeddings for any image.")

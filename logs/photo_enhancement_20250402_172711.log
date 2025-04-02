@@ -1,0 +1,19 @@
+2025-04-02 17:28:39,039 - photo_enhancement - INFO - Starting face enhancement process in ./output/best_faces with model_type=gfpgan, upscale=4
+2025-04-02 17:28:39,039 - photo_enhancement - INFO - Initializing FaceEnhancer with model_type=gfpgan, upscale=4
+2025-04-02 17:28:39,039 - photo_enhancement - DEBUG - Loading GFPGAN model from ./models/GFPGANCleanv1-NoCE-C2.pth
+2025-04-02 17:28:41,488 - photo_enhancement - INFO - Processing folder: person_0
+2025-04-02 17:28:41,488 - photo_enhancement - DEBUG - Enhancing image using gfpgan model
+2025-04-02 17:28:44,380 - photo_enhancement - INFO - Saved: ./output/best_faces/person_0/enhanced_person_0_best.jpg
+2025-04-02 17:28:44,380 - photo_enhancement - INFO - Processing folder: person_1
+2025-04-02 17:28:44,380 - photo_enhancement - DEBUG - Enhancing image using gfpgan model
+2025-04-02 17:28:47,234 - photo_enhancement - INFO - Saved: ./output/best_faces/person_1/enhanced_person_1_best.jpg
+2025-04-02 17:28:47,234 - photo_enhancement - INFO - Processing folder: person_2
+2025-04-02 17:28:47,235 - photo_enhancement - DEBUG - Enhancing image using gfpgan model
+2025-04-02 17:28:50,089 - photo_enhancement - INFO - Saved: ./output/best_faces/person_2/enhanced_person_2_best.jpg
+2025-04-02 17:28:50,090 - photo_enhancement - INFO - Processing folder: person_3
+2025-04-02 17:28:50,090 - photo_enhancement - DEBUG - Enhancing image using gfpgan model
+2025-04-02 17:28:53,036 - photo_enhancement - INFO - Saved: ./output/best_faces/person_3/enhanced_person_3_best.jpg
+2025-04-02 17:28:53,036 - photo_enhancement - INFO - Processing folder: person_4
+2025-04-02 17:28:53,036 - photo_enhancement - DEBUG - Enhancing image using gfpgan model
+2025-04-02 17:28:55,909 - photo_enhancement - INFO - Saved: ./output/best_faces/person_4/enhanced_person_4_best.jpg
+2025-04-02 17:28:55,909 - photo_enhancement - INFO - Face enhancement process completed

@@ -2,6 +2,9 @@
 import cv2
 import os
 import numpy as np
+from . import logger
+
+logger = logger.get_logger(module_name="PEBC")
 
 def enhance_image(image):
     # 1. Remove noise using Gaussian Blur
@@ -14,8 +17,7 @@ def enhance_image(image):
     l = clahe.apply(l)
     lab = cv2.merge((l, a, b))
     image_clahe = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    
-    # 3. Further noise reduction using Median Blur
+
     image_denoised = cv2.medianBlur(image_clahe, 3)
     
     # 4. Apply sharpening using Unsharp Mask
@@ -25,23 +27,24 @@ def enhance_image(image):
     return improved_image
 
 def process_images_in_folder(folder_path):
-    # Get a list of all files in the folder
+
+    logger.info(f"Starting image processing in folder: {folder_path}")
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
         
-        # Check if the file is an image (based on the extension)
         if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
             # Load the image
             image = cv2.imread(file_path)
             
             if image is not None:
-                # Enhance the image
+                logger.debug(f"Enhancing image: {filename}")
                 enhanced_image = enhance_image(image)
-                
-                # Save the enhanced image, replacing the original
+
                 cv2.imwrite(file_path, enhanced_image)
-                print(f"Image {filename} enhanced and saved.")
+                logger.info(f"Image {filename} enhanced and saved.")
             else:
-                print(f"Failed to load {filename}.")
+                logger.error(f"Failed to load {filename}.")
         else:
-            print(f"{filename} is not an image.")
+            logger.debug(f"{filename} is not an image.")
+    
+    logger.info(f"Completed processing all images in folder: {folder_path}")

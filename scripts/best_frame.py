@@ -3,10 +3,17 @@ import shutil
 import numpy as np
 import cv2
 import mediapipe as mp
+from . import logger
+import sys
+
+#temporary solution to disable logs from absl, tensorflow at c++ level
+null_fd = os.open(os.devnull, os.O_WRONLY)
+os.dup2(null_fd, sys.stderr.fileno())
+
+get_logger = logger.get_logger
 
 class FaceEvaluator:
     def __init__(self, min_detection_confidence=0.3, eye_ar_base=0.15):
-
         self.min_detection_confidence = min_detection_confidence
         self.eye_ar_base = eye_ar_base
         self.face_detection_1 = mp.solutions.face_detection.FaceDetection(model_selection=1, 
@@ -20,6 +27,7 @@ class FaceEvaluator:
             refine_landmarks=True,
             min_detection_confidence=min_detection_confidence
         )
+        self.logger = get_logger("face_evaluator")
 
     def upscale_if_needed(self, image, min_size=150):
         h, w, _ = image.shape
@@ -31,7 +39,6 @@ class FaceEvaluator:
         return image
 
     def evaluate_frontalness(self, image_rgb):
-
         results = self.face_mesh.process(image_rgb)
         if not results.multi_face_landmarks:
             return 0
@@ -49,7 +56,6 @@ class FaceEvaluator:
         return ratio
 
     def evaluate_eyes_open(self, image_rgb):
-
         results = self.face_mesh.process(image_rgb)
         if not results.multi_face_landmarks:
             return 0
@@ -83,10 +89,9 @@ class FaceEvaluator:
         return normalized_ear
 
     def evaluate(self, image_path):
-
         image = cv2.imread(image_path)
         if image is None:
-            print(f"[DEBUG] Could not load: {image_path}")
+            self.logger.debug(f"Could not load: {image_path}")
             return 0
 
         image = self.upscale_if_needed(image, min_size=150)
@@ -97,7 +102,7 @@ class FaceEvaluator:
         if not results.detections:
             results0 = self.face_detection_0.process(image_rgb)
             if not results0.detections:
-                print(f"[DEBUG] Face not found: {image_path}")
+                self.logger.debug(f"Face not found: {image_path}")
                 return 0
             else:
                 detection = results0.detections[0]
@@ -150,16 +155,15 @@ class FaceEvaluator:
                        w_eye * eyes_open_score +
                        w_res * resolution_score)
 
-        # Print debug information
-        print(f"[DEBUG] {image_path}")
-        print(f"  Sharpness={sharpness_val:.1f} => {sharpness_norm:.2f}")
-        print(f"  Brightness={brightness:.1f} => {brightness_score:.2f}")
-        print(f"  Coverage={coverage:.3f}")
-        print(f"  CenterDist={center_distance_norm:.3f} => {1 - center_distance_norm:.3f}")
-        print(f"  Frontalness={frontalness:.3f}")
-        print(f"  EyesOpen={eyes_open_score:.3f}")
-        print(f"  Resolution Score={(w * h):.0f} px => {resolution_score:.3f}")
-        print(f"  => final_score={final_score:.3f}\n")
+        self.logger.debug(f"{image_path}")
+        self.logger.debug(f"  Sharpness={sharpness_val:.1f} => {sharpness_norm:.2f}")
+        self.logger.debug(f"  Brightness={brightness:.1f} => {brightness_score:.2f}")
+        self.logger.debug(f"  Coverage={coverage:.3f}")
+        self.logger.debug(f"  CenterDist={center_distance_norm:.3f} => {1 - center_distance_norm:.3f}")
+        self.logger.debug(f"  Frontalness={frontalness:.3f}")
+        self.logger.debug(f"  EyesOpen={eyes_open_score:.3f}")
+        self.logger.debug(f"  Resolution Score={(w * h):.0f} px => {resolution_score:.3f}")
+        self.logger.debug(f"  => final_score={final_score:.3f}")
 
         return final_score
 
@@ -167,7 +171,7 @@ class FaceEvaluator:
 class FolderProcessor:
     @staticmethod
     def select_best_image_in_folder(folder_path, evaluator):
-
+        logger = get_logger("folder_processor")
         best_score = -1
         best_image = None
         for filename in os.listdir(folder_path):
@@ -181,7 +185,7 @@ class FolderProcessor:
 
     @staticmethod
     def process_all_folders(parent_folder, output_folder):
-
+        logger = get_logger("folder_processor")
         os.makedirs(output_folder, exist_ok=True)
         evaluator = FaceEvaluator()
         for folder in os.listdir(parent_folder):
@@ -193,6 +197,6 @@ class FolderProcessor:
                     os.makedirs(output_subfolder, exist_ok=True)
                     output_path = os.path.join(output_subfolder, f"{folder}_best.jpg")
                     shutil.copy(best_image, output_path)
-                    print(f"Best photo in '{folder}': {os.path.basename(best_image)}, score={score:.2f} -> {output_path}")
+                    logger.info(f"Best photo in '{folder}': {os.path.basename(best_image)}, score={score:.2f} -> {output_path}")
                 else:
-                    print(f"No suitable images found in '{folder}'")
+                    logger.info(f"No suitable images found in '{folder}'")

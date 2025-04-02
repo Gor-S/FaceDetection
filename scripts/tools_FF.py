@@ -1,4 +1,4 @@
-"""Face Finder"""
+"""Face Finder Tools"""
 import os
 import re
 import cv2
@@ -15,6 +15,28 @@ def get_video_fps(video_path):
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
     return fps
+
+def seconds_to_timecode(seconds, fps=25):
+    """
+    Convert seconds to HH:MM:SS:FF timecode format
+    
+    Args:
+        seconds (float): Time in seconds
+        fps (float): Frames per second
+    
+    Returns:
+        str: Formatted timecode
+    """
+    # Calculate hours, minutes, seconds, and frames
+    total_frames = int(seconds * fps)
+    frames = total_frames % int(fps)
+    total_seconds = total_frames // int(fps)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    
+    # Format as HH:MM:SS:FF
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}:{frames:02d}"
 
 def extract_frame_number(filename):
     """
@@ -105,4 +127,3 @@ def compute_target_embedding(target_face_path, device="cpu"):
     with torch.no_grad():
         embedding = resnet(img_tensor)
     return embedding.cpu().numpy().flatten()
-
