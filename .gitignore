@@ -2,3 +2,4 @@ models/
 gfpgan/
 output/best_faces/
 scripts/__pycache__
+logs/
