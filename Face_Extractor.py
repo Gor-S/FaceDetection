@@ -70,7 +70,7 @@ if __name__ == "__main__":
             upscale
         )
 
-        print("✅ Processing complete!")
+        print(f"✅ Processing complete! The result can be viewed in the directory {best_faces_dir}")
         
     except Exception as e:
         raise (f"❌ Error during processing: {e}")
