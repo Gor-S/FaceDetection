@@ -3,6 +3,7 @@ import os
 import shutil
 import gc
 import torch
+from datetime import datetime
 from . import logger
 
 # Initialize logger
@@ -45,3 +46,8 @@ def clear_memory():
             error_msg = f"GPU memory cleanup error: {e}"
             logger.warning(error_msg)
 
+
+def generate_folder_name():
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    save_dir = os.path.join("output/best_faces", timestamp)
+    return save_dir

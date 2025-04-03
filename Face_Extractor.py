@@ -44,10 +44,11 @@ if __name__ == "__main__":
         tools.clear_memory()
         
         # 3. Selecting the best frames
+        best_faces_dir = tools.generate_folder_name()
         print("📸 Selecting best frames...")
         best_frame.FolderProcessor.process_all_folders(
             fe_config.get("clusters_output_dir"), 
-            fe_config.get("best_faces_dir")
+            best_faces_dir
         )
 
         # Cleanup temporary clustered faces and output faces if requested
@@ -63,7 +64,7 @@ if __name__ == "__main__":
         upscale = fe_config.get("enhancement", {}).get("upscale", 4)
 
         enhancer.process_folders(
-            fe_config.get("best_faces_dir"),
+            best_faces_dir,
             model_type,
             model_path,
             upscale
