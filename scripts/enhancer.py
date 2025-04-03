@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 from gfpgan import GFPGANer
 from . import logger
+from . import progress_bar
 
 logger = logger.get_logger(module_name="photo_enhancement")
 
@@ -86,27 +87,46 @@ def process_folders(base_dir, model_type='gfpgan', model_path=None, upscale=4):
     logger.info(f"Starting face enhancement process in {base_dir} with model_type={model_type}, upscale={upscale}")
     enhancer = FaceEnhancer(model_type=model_type, model_path=model_path, upscale=upscale)
 
+    # Count total files for progress reporting
+    total_files = 0
+    person_folders = []
     for folder in sorted(os.listdir(base_dir)):
         folder_path = os.path.join(base_dir, folder)
         if os.path.isdir(folder_path) and folder.startswith("person_"):
-            logger.info(f"Processing folder: {folder}")
+            person_folders.append(folder)
             for file in os.listdir(folder_path):
+                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    total_files += 1
+    
+    with progress_bar.ProgressBar(total=total_files, desc="Enhancing faces", unit="images", color="green") as pbar:
+        for folder in person_folders:
+            folder_path = os.path.join(base_dir, folder)
+            logger.info(f"Processing folder: {folder}")
+            
+            # Create folder progress bar
+            folder_files = [f for f in os.listdir(folder_path) 
+                          if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+            
+            for file in folder_files:
                 if file.lower().endswith(('.jpg', '.jpeg', '.png')):
                     input_path = os.path.join(folder_path, file)
                     output_path = os.path.join(folder_path, f"enhanced_{file}")
 
                     if os.path.exists(output_path):
                         logger.debug(f"Skipping: {output_path} (already exists)")
+                        pbar.update(1)
                         continue
 
                     image = cv2.imread(input_path)
                     if image is None:
                         logger.warning(f"Skipping: {input_path} (failed to load)")
+                        pbar.update(1)
                         continue
 
                     # Enhance the image
                     enhanced_img = enhancer.enhance(image)
                     cv2.imwrite(output_path, enhanced_img)
                     logger.info(f"Saved: {output_path}")
+                    pbar.update(1)
     
     logger.info("Face enhancement process completed")

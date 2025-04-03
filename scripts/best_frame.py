@@ -5,8 +5,9 @@ import cv2
 import mediapipe as mp
 from . import logger
 import sys
+from .progress_bar import ProgressBar
 
-#temporary solution to disable logs from absl, tensorflow at c++ level
+# temporary solution to disable logs from absl, tensorflow at c++ level
 null_fd = os.open(os.devnull, os.O_WRONLY)
 os.dup2(null_fd, sys.stderr.fileno())
 
@@ -28,6 +29,16 @@ class FaceEvaluator:
             min_detection_confidence=min_detection_confidence
         )
         self.logger = get_logger("face_evaluator")
+
+    def evaluate_batch(self, image_paths):
+        results = []
+        with ProgressBar(total=len(image_paths), desc="Processing images", unit="img") as pbar:
+            for image_path in image_paths:
+                score = self.evaluate(image_path)
+                results.append((image_path, score))
+                pbar.update()
+                sys.stdout.flush()
+        return results
 
     def upscale_if_needed(self, image, min_size=150):
         h, w, _ = image.shape

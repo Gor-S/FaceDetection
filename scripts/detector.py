@@ -1,4 +1,5 @@
 import os
+import sys
 import cv2
 import gc
 import torch
@@ -10,6 +11,7 @@ from ultralytics import YOLO
 from ultralytics import settings
 from . import tools
 from . import logger
+from . import progress_bar
 
 logger.logging.getLogger("ultralytics").setLevel(logger.logging.ERROR)
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -26,16 +28,16 @@ class FrameDataset(Dataset):
         self.logger = get_logger("frame_dataset")
 
     def _extract_frames(self):
-        # Extract frames from the video between start_frame and end_frame with frame skipping
         cap = cv2.VideoCapture(self.video_path)
         cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
         frames = []
         frame_id = self.start_frame
+        
         while cap.isOpened() and frame_id < self.end_frame:
             ret, frame = cap.read()
             if not ret:
                 break
-            if frame_id % self.frame_skip == 0:
+            if (frame_id - self.start_frame) % self.frame_skip == 0:
                 frames.append((frame_id, frame))
             frame_id += 1
         cap.release()
@@ -47,7 +49,7 @@ class FrameDataset(Dataset):
     def __getitem__(self, idx):
         return self.frames[idx]
 
-def process_batch(model, batch, output_dir):
+def process_batch(model, batch, output_dir, processed_faces_counter=None, frames_counter=None):
     logger = get_logger("process_batch")
     try:
         frame_ids, frames = zip(*batch)
@@ -55,13 +57,13 @@ def process_batch(model, batch, output_dir):
         frames_rgb = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in frames]
         results = model.predict(source=frames_rgb, device=device, verbose=False)
 
+        face_count = 0
         if not isinstance(results, (list, tuple)):
             results = [results]
         for frame_id, frame, result in zip(frame_ids, frames, results):
             h, w, _ = frame.shape
             try:
                 for i, box in enumerate(result.boxes.xyxy):
-                    # Extract bounding box coordinates and add padding
                     x1, y1, x2, y2 = map(int, box)
                     padding_x, padding_y = int((x2 - x1) * 0.05), int((y2 - y1) * 0.05)
                     x1, y1 = max(0, x1 - padding_x), max(0, y1 - padding_y)
@@ -69,15 +71,24 @@ def process_batch(model, batch, output_dir):
                     face = frame[y1:y2, x1:x2]
                     save_path = os.path.join(output_dir, f"frame_{frame_id}_face_{i}.jpg")
                     cv2.imwrite(save_path, face)
+                    face_count += 1
             except Exception as inner_e:
                 logger.error(f"Processing result for frame {frame_id}: {type(inner_e).__name__}: {inner_e}")
+        
+        if processed_faces_counter is not None:
+            processed_faces_counter.value += face_count
+        if frames_counter is not None:
+            frames_counter.value += len(frames)
+            
     except Exception as e:
         logger.error(f"Batch processing: {type(e).__name__}: {e}")
+
 
 def collate_fn(batch):
     return batch
 
-def process_range(video_path, start_frame, end_frame, frame_skip, output_dir, model_path, batch_size=8, num_workers=4):
+def process_range(video_path, start_frame, end_frame, frame_skip, output_dir, model_path, 
+                  batch_size=8, num_workers=4, progress_shared_dict=None):
     logger = get_logger("process_range")
     model = YOLO(model_path).to(device)
     if device == "cuda":
@@ -89,12 +100,28 @@ def process_range(video_path, start_frame, end_frame, frame_skip, output_dir, mo
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
 
     logger.info(f"[{multiprocessing.current_process().name}] Processing frames {start_frame}–{end_frame}")
+    
+    # Create a shared counters
+    manager = multiprocessing.Manager()
+    processed_faces_counter = manager.Value('i', 0)
+    frames_counter = manager.Value('i', 0)
+    
     with ThreadPoolExecutor(max_workers=4) as executor:
         for batch in dataloader:
-            executor.submit(process_batch, model, batch, output_dir)
+            executor.submit(process_batch, model, batch, output_dir, processed_faces_counter, frames_counter)
+            
+            if progress_shared_dict is not None:
+                process_id = multiprocessing.current_process().name
+                progress_shared_dict[process_id] = {
+                    'frames_processed': frames_counter.value,
+                    'faces_detected': processed_faces_counter.value
+                }
+            
             gc.collect()
             if device == "cuda":
                 torch.cuda.empty_cache()
+    
+    return processed_faces_counter.value
 
 
 class VideoProcessor:
@@ -114,7 +141,6 @@ class VideoProcessor:
         
         # Limit CPU workers to 70% of available cores
         cpu_limit = max(1, int(cpu_cores * config["common"]["cpu_limit"]))
-
         
         max_workers = gpu_cores * max_gpu_workers if gpu_cores > 0 else cpu_limit
         
@@ -134,12 +160,65 @@ class VideoProcessor:
     def process(self):
         self.logger.info(f"Device: {self.device.upper()}, Workers: {self.num_workers}")
         frame_ranges = self._split_video_ranges()
-        with ProcessPoolExecutor(max_workers=self.num_workers, mp_context=multiprocessing.get_context("spawn")) as executor:
-            futures = [
-                executor.submit(process_range, self.video_path, start, end, self.frame_skip, self.output_dir, self.model_path, num_workers=config["common"]["max_workers"])
-                for start, end in frame_ranges
-            ]
-            for future in futures:
-                future.result() 
+    
+        # Calculate total frame count for progress reporting
+        cap = cv2.VideoCapture(self.video_path)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        effective_total = total_frames // self.frame_skip
+        cap.release()
+    
+        manager = multiprocessing.Manager()
+        progress_shared_dict = manager.dict()
+    
+        with progress_bar.ProgressBar(total=effective_total, 
+            desc="Video Processing", 
+            unit="frames", 
+            color="blue") as pbar:
 
-        self.logger.info("Processing complete.")
+            with ProcessPoolExecutor(max_workers=self.num_workers, mp_context=multiprocessing.get_context("spawn")) as executor:
+                futures = [
+                    executor.submit(
+                        process_range, 
+                        self.video_path, start, end, 
+                        self.frame_skip, self.output_dir, self.model_path, 
+                        num_workers=config["common"]["max_workers"],
+                        progress_shared_dict=progress_shared_dict
+                    )
+                    for start, end in frame_ranges
+                ]
+            
+                last_reported_progress = 0
+                total_faces = 0
+            
+                update_interval = 0.05 
+            
+                while not all(f.done() for f in futures):
+                    current_total_frames = sum(data.get('frames_processed', 0) 
+                        for data in progress_shared_dict.values())
+                    current_total_faces = sum(data.get('faces_detected', 0)
+                        for data in progress_shared_dict.values())
+                    new_frames = current_total_frames - last_reported_progress
+                
+                    # Update progress bar if there's new progress
+                    if new_frames > 0:
+                        pbar.update(new_frames)
+                        last_reported_progress = current_total_frames
+                    
+                        # If faces count changed, add to description
+                        if current_total_faces != total_faces:
+                            total_faces = current_total_faces
+                            pbar.set_description(f"Video Processing (Faces: {total_faces})")
+                
+                    sys.stdout.flush()
+            
+                    import time
+                    time.sleep(update_interval)
+            
+                # Wait for all futures to complete and collect results
+                total_faces_detected = sum(future.result() for future in futures)
+        
+            # Ensure the progress bar reaches 100% at the end
+            if last_reported_progress < effective_total:
+                pbar.update(effective_total - last_reported_progress)
+
+        self.logger.info(f"Processing complete. Detected {total_faces_detected} faces in {effective_total} frames.")
