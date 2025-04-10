@@ -116,7 +116,7 @@ def compute_target_embedding(target_face_path, device="cpu"):
         transforms.Resize((160, 160)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    ])
+    ])    # Resize enhanced image to match original if dimensions differ
     resnet = InceptionResnetV1(pretrained='vggface2').eval().to(device)
     img = cv2.imread(target_face_path)
     if img is None:
