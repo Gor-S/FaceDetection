@@ -14,7 +14,7 @@ from . import logger
 from . import progress_bar
 
 logger.logging.getLogger("ultralytics").setLevel(logger.logging.ERROR)
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "cuda"
 config = tools.load_config("config/config.yaml")
 get_logger = logger.get_logger
 
@@ -24,23 +24,30 @@ class FrameDataset(Dataset):
         self.start_frame = start_frame
         self.end_frame = end_frame
         self.frame_skip = frame_skip
-        self.frames = self._extract_frames()
         self.logger = get_logger("frame_dataset")
 
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"📂 File not found: {video_path}")
+
+        self.cap = cv2.VideoCapture(self.video_path) 
+        if not self.cap.isOpened():
+            raise IOError(f"📹 Failed to open video: {video_path}")
+
+        print("✅ [INFO] Video path is valid and accessible.")
+        self.frames = self._extract_frames()  
     def _extract_frames(self):
-        cap = cv2.VideoCapture(self.video_path)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.start_frame)
         frames = []
         frame_id = self.start_frame
         
-        while cap.isOpened() and frame_id < self.end_frame:
-            ret, frame = cap.read()
+        while self.cap.isOpened() and frame_id < self.end_frame:
+            ret, frame = self.cap.read()
             if not ret:
                 break
             if (frame_id - self.start_frame) % self.frame_skip == 0:
                 frames.append((frame_id, frame))
             frame_id += 1
-        cap.release()
+        self.cap.release()
         return frames
 
     def __len__(self):
@@ -90,40 +97,44 @@ def collate_fn(batch):
 def process_range(video_path, start_frame, end_frame, frame_skip, output_dir, model_path, 
                   batch_size=8, num_workers=4, progress_shared_dict=None):
     logger = get_logger("process_range")
-    model = YOLO(model_path).to(device)
-    if device == "cuda":
-        model.fuse()
-        model.half()
+
+    if not torch.cuda.is_available():
+        logger.error("❌ CUDA device not available. Cannot proceed with GPU-only execution.")
+        raise RuntimeError("CUDA is not available on this system.")
+
+    device = "cuda" 
+
+    model = YOLO(model_path)
+    model.to(device)
+
+    model.fuse()
+    model.half()
 
     dataset = FrameDataset(video_path, start_frame, end_frame, frame_skip)
-    
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_fn)
 
     logger.info(f"[{multiprocessing.current_process().name}] Processing frames {start_frame}–{end_frame}")
-    
-    # Create a shared counters
+
     manager = multiprocessing.Manager()
     processed_faces_counter = manager.Value('i', 0)
     frames_counter = manager.Value('i', 0)
-    
+
+    # 🔁 Dataloader loop
     with ThreadPoolExecutor(max_workers=4) as executor:
         for batch in dataloader:
             executor.submit(process_batch, model, batch, output_dir, processed_faces_counter, frames_counter)
-            
+
             if progress_shared_dict is not None:
                 process_id = multiprocessing.current_process().name
                 progress_shared_dict[process_id] = {
                     'frames_processed': frames_counter.value,
                     'faces_detected': processed_faces_counter.value
                 }
-            
+
             gc.collect()
-            if device == "cuda":
-                torch.cuda.empty_cache()
-    
+            torch.cuda.empty_cache()
+
     return processed_faces_counter.value
-
-
 class VideoProcessor:
     def __init__(self, video_path, model_path, frame_skip, output_dir, max_gpu_workers=2, device=device):
         self.video_path = video_path

@@ -19,7 +19,7 @@ face_extractor:
   face_model_path: "./models/yolov8n-face.pt"
   
   # Video Processing
-  frame_skip: 5
+  frame_skip: 4
   enhancement:
     model: "gfpgan"   # options: "gfpgan", "edsr"
     upscale: 4
