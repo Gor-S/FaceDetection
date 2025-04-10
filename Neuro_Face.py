@@ -16,12 +16,15 @@ if __name__ == "__main__":
         
         config = tools.load_config("config/config.yaml")
         fe_config = config.get("face_extractor", {})
-
-        print("Enter the path to the video: ")
-        video_path = input().strip()
-        os.makedirs(fe_config.get("faces_output_dir", "./output/faces"), exist_ok=True)
-        os.makedirs(fe_config.get("best_faces_dir", "./output/best_faces"), exist_ok=True)
-        
+        while True:
+            video_path = input("📹 Enter the path to the video (or type 'exit' to quit): ").strip()
+            if video_path.lower() == "exit":
+                print("👋 Exiting.")
+                exit()
+            if os.path.isfile(video_path):
+                break
+            else:
+                print(f"❌ File '{video_path}' not found. Try again or type 'exit' to quit.\n")
         # 1. Face detection
         print("🔍 Detecting faces...")
         processor = detector.VideoProcessor(
