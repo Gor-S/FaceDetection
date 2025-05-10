@@ -1,0 +1,33 @@
+# Unified Configuration for Face Processing Suite
+
+# ---------------COMMON SETTINGS-----------------
+common:
+  models_dir: "./models"
+  max_workers: 0       # Number of processing threads (0 = auto)
+  cpu_limit: 0.7       # limit for cpu (0.1-1.0)
+
+# ---------------FACE EXTRACTOR-----------------
+face_extractor:
+  # Paths
+  faces_output_dir: "./output/faces"
+  clusters_output_dir: "./output/clustered_faces"
+  best_faces_dir: "./output/best_faces"
+  
+  # Models
+  GFPGAN_model_path: "./models/GFPGANCleanv1-NoCE-C2.pth"
+  EDSR_model_path: "./models/EDSR_x4.pb"
+  face_model_path: "./models/yolov8n-face.pt"
+  
+  # Video Processing
+  frame_skip: 4
+  enhancement:
+    model: "gfpgan"   # options: "gfpgan", "edsr"
+    upscale: 4
+
+# ---------------FACE FINDER-----------------
+face_finder:
+  model_path: "./models/yolov8n-face.pt"
+  frame_skip: 5
+  output_dir: "FF_output_dir"
+  threshold: 0.6
+  min_gap: 1.0
